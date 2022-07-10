@@ -1,5 +1,6 @@
 (ns gc.ui
-  (:require [clojure.string :as s]))
+  (:require [clojure.string :as s]
+            [reagent.core :as reagent]))
 
 (defn table-of-contents [larps]
   (let [halfway (quot (count larps) 2)
@@ -27,7 +28,7 @@
     :else (k row))]))
 
 (defn contents [larps]
-  (for [row larps]
+  (into [:div] (for [row larps]
     [:div {:key (:anchor+url row)}
      [:h2 [:a {:name (:anchor+url row) :href ""} (:title row)]]
      [:h3 "by " (:designers row)]
@@ -43,7 +44,7 @@
                           :year+key]]
        (for [k (keys (apply dissoc (:headers row) accounted-for))]
          (display-info k row)))
-     ]))
+     ])))
 
 (defn header [larps]
   [:div
@@ -51,6 +52,6 @@
 
 (defn assembled-page [larps]
   [:div
-   (header larps)
-   (table-of-contents larps)
-   (contents larps)])
+   [header larps]
+   [table-of-contents larps]
+   [contents larps]])
