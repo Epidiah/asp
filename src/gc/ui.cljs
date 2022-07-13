@@ -1,5 +1,6 @@
 (ns gc.ui
   (:require [clojure.string :as s]
+            [gc.sort-n-sorcery :as sns]
             [reagent.core :as reagent]))
 
 (defn table-of-contents [larps]
@@ -50,8 +51,15 @@
   [:div
    [:h1 "Golden Cobra Submissions"]])
 
-(defn assembled-page [larps]
-  [:div
-   [header larps]
-   [table-of-contents larps]
-   [contents larps]])
+(defn assembled-page [state]
+  (let [sorting (:sorting @state)
+        filtering (sns/build-filters (:filtering @state))
+        entries (:entries @state)
+        larps (sorting
+                (eduction
+                  (apply comp filtering)
+                  entries))]
+    [:div
+     [header larps]
+     [table-of-contents larps]
+     [contents larps]]))
