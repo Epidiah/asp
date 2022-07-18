@@ -1,8 +1,11 @@
-(ns gc.init.larps
+(ns gc.init.state
   (:require [clojure.string :as s]
+            [clojure.set :refer [difference]]
+            [gc.sort-n-sorcery :as sns]
             [gc.utils.formats :as frmt]
             [goog.dom :as gdom]
-            [goog.labs.format.csv :as csv]))
+            [goog.labs.format.csv :as csv]
+            [reagent.core :as r]))
 
 (defonce collected-larp-els (array-seq (gdom/getElementsByClass "larps")))
 
@@ -11,10 +14,12 @@
   where the first row contains the headers."
   [csv-div]
   (let [rows (->> csv-div
-       .-innerHTML
-       csv/parse
-       js->clj
-       (remove empty?))]
+                  .-innerHTML
+                  s/trim
+                  frmt/unescape
+                  csv/parse
+                  js->clj
+                  (remove empty?))]
     (map (fn [row] (map #(s/trim %) row)) rows)))
 
 (defn format-keys 
@@ -37,6 +42,17 @@
                      (map #(s/trim %)))]
     (zipmap (format-keys keyring) keyring)))
 
+(defn format-url-vector
+  "Takes a string representing one or more urls and returs a vector
+  of those urls as individual strings."
+  [url-csv]
+  (->> url-csv
+      csv/parse
+      js->clj
+      flatten
+      (map #(s/trim %))
+      vec))
+
 (defn create-key-maps 
   "Takes a map representing a row of table data and returns a new map
   where all columns tagged with `+key` at the end now hold maps of the
@@ -48,12 +64,20 @@
            [k v]))
        row)))
 
+(defn create-url-vectors
+  [row]
+  (map (fn [[k v]]
+         (if (s/ends-with? (name k) "+url")
+           [k (format-url-vector v)]
+           [k v]))
+       row))
+
 (defn add-anchors
   "Adds a {:anchor+url URL} map to each row of data in a map.
   URL is generated using k and first 7 letters of the title."
   [rows k]
   (map (fn [row] (-> row
-                     (assoc :anchor+url (str k (subs (:title row) 0 7)))
+                     (assoc :anchor+url (str k (:title row)))
                      (assoc-in [:headers :anchor+url] "Anchor")))
        rows))
 
@@ -83,6 +107,7 @@
         header-map (zipmap headers (map clean-header columns))
         rows (map #(zipmap headers (into % more-cells)) (rest table))]
     (map (fn [row] (-> row
+                       create-url-vectors
                        create-key-maps
                        (assoc :headers header-map)))
          rows)))
@@ -97,3 +122,23 @@
         (add-anchors year))))
 
 (defonce entries (flatten (map div->map collected-larp-els)))
+
+(defonce app-state (r/atom {:filtering #{}
+                            :searching ""
+                            :search-all true
+                            :sorting sns/default-sort
+                            :entries entries}))
+
+(defonce all-headers (disj (->> (:entries @app-state)
+                          (mapcat keys)
+                          (into #{})) :headers))
+
+(defonce key-headers (->> all-headers
+                          (filter #(s/ends-with? (name %) "+key"))
+                          (into #{})))
+
+(defonce url-headers (->> all-headers
+                          (filter #(s/ends-with? (name %) "+url"))
+                          (into #{})))
+
+(defonce txt-headers (difference all-headers key-headers url-headers))

@@ -1,7 +1,11 @@
 (ns gc.sort-n-sorcery
-  (:require [clojure.string :as s]))
+  (:require [clojure.string :as s]
+            [gc.utils.formats :as frmt]))
 
-(def by-year (fn [row] (first (:year+key row))))
+(def by-year (fn [row] (-> row
+                           :year+key
+                           frmt/year+key->int
+                           -)))
 
 (defn by-title
   [row]
@@ -17,8 +21,3 @@
                               by-title)
                             %))
 
-(defn build-filters
-  "Expects a set of keyword tuples like [:tag :k+key] where :k+key is the
-  header+key underwhich the :tag can be found."
-  [filter-set]
-  (vec (for [[t k] filter-set] (filter (comp t k)))))

@@ -1,6 +1,10 @@
 (ns gc.utils.formats
   (:require [clojure.string :as s]))
 
+(defn unescape [escaped-string]
+  (-> escaped-string
+      (s/replace #"&amp;" "&")))
+
 (defn format-key [words]
   (-> words
       s/lower-case
@@ -23,3 +27,8 @@
         last-word (s/capitalize (last all-words))]
     (s/join " " (list first-word (s/join " " mid-words) last-word))))
 
+(defn year+key->int [yk]
+  (-> yk
+      ffirst
+      name
+      js/parseInt))
