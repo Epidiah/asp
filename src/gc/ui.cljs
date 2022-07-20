@@ -50,14 +50,51 @@
   ([key-header coll+key c]
    (into [:<>] (for [[k v] coll+key]
                  [:input {:type "button"
-                          :value (str v (when c (str "(" c ")")))
-                          :style (if (filtered? k key-header)
+                          :value (str v (when c (str " (" (k c) ")")))
+                          :style (into {:margin "0.1em 0.1em"}
+                                   (if (filtered? k key-header)
                                    {:background-color clr-dark :color clr-light}
-                                   {:background-color  clr-light :color clr-dark })
+                                   {:background-color  clr-light :color clr-dark }))
                           :class (name key-header)
                           :key (name k)
                           :on-click (filter-toggle k key-header)}]))))
- 
+
+(defn filter-by-keys [larps keyword-header]
+  (let [visible (r/atom 5)]
+    (fn [larps keyword-header]
+      (let [k-count (keyword-header (key-counts larps))
+            sort-fn (if (= keyword-header :year+key)
+                      #(- (js/parseInt (second %)))
+                      #(- ((first %) k-count)))
+            ks (sort-by sort-fn (apply merge (map keyword-header larps)))
+            headers (apply merge (map :headers larps))]
+        [:div [:hr]
+         [:label (str "Filter by " (keyword-header headers)) ": "]
+         (key-buttons keyword-header (if (= :year+key keyword-header)
+                                      ks
+                                      (take @visible ks)) k-count)
+         (when (not= :year+key keyword-header)
+           (if (< @visible (count ks))
+             [:input {:type "button"
+                      :value (str "+ " (count (drop @visible ks))
+                                  " more "
+                                  (keyword-header headers))
+                      :style {:margin "0.1em 0.1em"
+                              :background-color  clr-dark
+                              :color clr-light}
+                      :class "extend-filter"
+                      :on-click #(reset! visible (count ks))}]
+             (when (> (count ks) 5)
+               [:input {:type "button"
+                      :value (str "Less "
+                                  (keyword-header headers))
+                      :style {:margin "0.1em 0.1em"
+                              :background-color  clr-dark
+                              :color clr-light}
+                      :class "extend-filter"
+                      :on-click #(reset! visible 5)}])
+             ))]))))
+
 (defn mark-text 
   ([text] (let [searching (s/trim (:searching @app-state))]
             (if (seq searching)
@@ -105,20 +142,11 @@
          (display-info k row))))
      ])))
 
-(defn radio [label r-name value]
-  [:<>
-   [:label
-    [:input {:type :radio
-             :id (str "radio-" r-name value)
-             :name r-name
-             :value value
-             :style {:margin-left "1em"}}]
-    label]])
-
 (defn search-bar [larps]
   (let [no-match (r/atom false)]
     (fn [larps]
-      [:div [:label {:for "search"} "Search: "]
+      [:div [:label {:for "search"
+                     :style {:margin-right "0.3em"}} "Filter by Search: "]
        [:input {:type "text" :id "search" :name "search"
                 :on-input #(let [q (.. % -target -value)]
                              (if (stiii/fruitful-search? q larps)
@@ -128,14 +156,27 @@
                                (do
                                  (stiii/add-search! "")
                                  (reset! no-match true))))}]
-       (when @no-match [:span {:style {:color "#a44"}} " No Matches Found"])
-       (radio " Match any of the terms" "search-type" "any")
-       (radio " Match all of the terms" "search-type" "all")])))
+       [:input {:type "button"
+                :value "Clear Search"
+                :style {:margin "0.1em 0.1em"
+                        :background-color  clr-dark
+                        :color clr-light}
+                :class "search-clear"
+                :on-click #(do
+                             (stiii/add-search! "")
+                             (reset! no-match false)
+                             (set!
+                               (.. (gdom/getElement "search") -value) ""))
+                }]
+       (when @no-match [:span {:style {:color "#a44"}} " No Matches Found"]) ])))
 
 (defn header [larps]
   [:div
    [:h1 "Golden Cobra Submissions"]
-   [search-bar larps]])
+   [search-bar larps]
+   [filter-by-keys larps :tags+key]
+   [filter-by-keys larps :styles-of-play+key]
+   [filter-by-keys larps :year+key]])
 
 (defn assembled-page []
   (let [sorting (:sorting @app-state)
