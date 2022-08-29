@@ -1,5 +1,5 @@
 (ns gc.search-for-spock
-  (:require [gc.init.state :refer [app-state key-headers txt-headers]]
+  (:require [gc.state.init :refer [app-state key-headers txt-headers]]
             [clojure.string :as s]))
 
 (def searchable-keys 

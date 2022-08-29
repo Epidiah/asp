@@ -1,93 +1,100 @@
 body
 {
-	background-color: #FFFFCC;
-	font-family: sans-serif;
+  background-color: #FFFFCC;
+  font-family: sans-serif;
 }
 
 #header
 {
-	background-color: #1a1a1a;
-	color: #FFFFCC;
-	padding: 20px;
+  background-color: #1a1a1a;
+  color: #FFFFCC;
+  padding: 20px;
 }
 
 #header .header-item
 {
-	display: block;
-	float: left;
+  display: block;
+  float: left;
 }
 
 .header-btn
 {
-	padding: 6px 12px;
-	margin-bottom: 0;
-	font-size: 16px;
-	font-weight: 400;
-	line-height: 1.42857143;
-	text-align: center;
-	white-space: nowrap;
-	vertical-align: middle;
-	-ms-touch-action: manipulation;
-	touch-action: manipulation;
-	cursor: pointer;
-	-webkit-user-select: none;
-	-moz-user-select: none;
-	-ms-user-select: none;
-	user-select: none;
-	background-color: #FFFFCC;
-	color: #333333;
-	border: 2px solid #c0c0c0;
-	border-radius: 6px;
+  padding: 6px 12px;
+  margin-bottom: 0;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.42857143;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: middle;
+  -ms-touch-action: manipulation;
+  touch-action: manipulation;
+  cursor: pointer;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  background-color: #FFFFCC;
+  color: #333333;
+  border: 2px solid #c0c0c0;
+  border-radius: 6px;
 }
 
 .header-dropdown
 {
-	margin-top: 20px;
+  margin-top: 20px;
 }
 
 .dropdown-menu
 {
-	background-color: #FFFFCC;
-	color: #333333;
-	border: 2px solid #c0c0c0;
-	border-radius: 6px;
+  background-color: #FFFFCC;
+  color: #333333;
+  border: 2px solid #c0c0c0;
+  border-radius: 6px;
 }
 
 .dropdown-menu > li > a:hover,
 .dropdown-menu > li > a:focus
 {
-	text-decoration: none;
-	color: #333333;
-	background-color: #FFFFFF;
+  text-decoration: none;
+  color: #333333;
+  background-color: #FFFFFF;
 }
 
 a.header-link
 {
-	color: #FFFFCC;
-	text-decoration: none;
+  color: #FFFFCC;
+  text-decoration: none;
 }
 
 .content
 {
-	border:2px solid #c0c0c0;
-	border-radius: 15px;
-	background-color: #FFFFFF;
-	padding-bottom: 15px;
-	margin-top: 15px;
-	margin-bottom: 15px;
+  border:2px solid #c0c0c0;
+  border-radius: 15px;
+  background-color: #FFFFFF;
+  padding-bottom: 15px;
+  margin-top: 15px;
+  margin-bottom: 15px;
 }
 
 #footer
 {
-	background-color: #1a1a1a;
-	color: #FFFFCC;
-	text-align: left;
-	padding: 20px;
+  background-color: #1a1a1a;
+  color: #FFFFCC;
+  text-align: left;
+  padding: 20px;
 }
 
-table, th, td {
-    border: 1px solid black;
-    border-collapse: collapse;
-    padding: 15px;
+table, th, td
+{
+  border: 1px solid black;
+  border-collapse: collapse;
+  padding: 15px;
 }
 
+input
+{
+  margin: 0.1em 0.1em;
+  border-radius: 5px;
+  border: 1px solid #1a1a1a;
+}
