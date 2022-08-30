@@ -208,9 +208,10 @@
   [:div
    [:h1 "Interactive Golden Cobra Archive"]
    [search-bar larps]
+   [filter-by-keys larps :year+key]
    [filter-by-keys larps :styles-of-play+key]
    [filter-by-keys larps :tags+key]
-   [filter-by-keys larps :year+key]])
+   ])
 
 (defn assembled-page []
   (let [sorting (:sorting @app-state)
@@ -230,5 +231,4 @@
        [table-of-contents larps]
        [contents larps]]
       (doseq [[yr _] (:year-range @app-state)]
-                                   (pf/add-filter! yr :year+key)))
-    ))
+        (pf/add-filter! yr :year+key)))))

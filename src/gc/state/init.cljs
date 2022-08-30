@@ -43,7 +43,7 @@
   "Takes a string representing a csv of headers and returns a map
   that associates the keyword for each header with the plain string."
   [key-csv]
-  (let [keyring (->> key-csv
+  (let [keyring (->> (s/replace key-csv \; \,)
                      csv/parse
                      js->clj
                      flatten

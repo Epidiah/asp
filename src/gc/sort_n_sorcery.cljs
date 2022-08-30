@@ -16,6 +16,9 @@
   [row]
   (let [title (s/lower-case (:title row))]
     (cond-> (:title row)
+      (s/starts-with? title "#") (subs 1)
+      (s/starts-with? title "(") (subs 1)
+      (s/starts-with? title "[") (subs 1)
       (s/starts-with? title "\"") (subs 1)
       (s/starts-with? title "'") (subs 1)
       (s/starts-with? title "『") (subs 1)
