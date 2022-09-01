@@ -9,13 +9,15 @@
 
 (defonce collected-larp-els (array-seq (gdom/getElementsByClass "larps")))
 
-(def year-range
-  (set
-    (map #((juxt keyword identity)
-           (.getAttribute % "id")) collected-larp-els)))
+(defn id->years [coll]
+  (map #(js/parseInt (.getAttribute % "id")) coll))
 
-(def init-year-filter
-  (set (for [[yr _] year-range] [yr :year+key])))
+(def year-range
+  (->> collected-larp-els
+       id->years 
+       ((juxt #(apply min %) #(inc (apply max %))))
+       (apply range)
+       reverse))
 
 (defn csv-div->seq-table 
   "Takes a div containing csv data and returns a seq of rows of table data
@@ -123,25 +125,27 @@
 (defn div->map
   "Takes a div of csv larp data and transforms it into a map of that data."
   [div]
-  (let [year (.-id div)]
-    (-> div
-        csv-div->seq-table
-        (seq-table->map "Year+key" year)
-        (add-anchors year))))
+  (let [year (.-id div)
+        entries (-> div
+                    csv-div->seq-table
+                    (seq-table->map "Year+key" year)
+                    (add-anchors year))]
+    {(js/parseInt year) (sort-by sns/sort-by-title entries)}))
 
-(defonce entries (flatten (map div->map collected-larp-els)))
+(defonce entries (reduce into (sorted-map-by >) (map div->map collected-larp-els)))
 
-(defonce app-state (r/atom {:filtering init-year-filter
+(defonce app-state (r/atom {:filtering #{}
                             :searching ""
-                            :search-all true
-                            :sorting sns/default-sort
+                            :no-match false
+                            :missing-years #{}
                             :year-range year-range
-                            :random-larps {}
                             :entries entries}))
 
 (defonce all-headers (disj (->> (:entries @app-state)
-                          (mapcat keys)
-                          (into #{})) :headers))
+                                vals
+                                flatten
+                                (mapcat keys)
+                                (into #{})) :headers))
 
 (defonce key-headers (->> all-headers
                           (filter #(s/ends-with? (name %) "+key"))

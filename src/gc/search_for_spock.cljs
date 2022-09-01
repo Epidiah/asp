@@ -59,5 +59,13 @@
 (defn fruitful-search? [user-input larps]
     (seq (filter (search-fn user-input) larps)))
 
+(defn change-match! [match?]
+      (swap! app-state assoc :no-match match?))
+
 (defn add-search! [user-input]
-      (swap! app-state #(assoc-in % [:searching] user-input)))
+      (swap! app-state assoc :searching user-input))
+
+(defn clear-search! [input-elem]
+  (add-search! "")
+  (change-match! false)
+  (set! (.. input-elem -value) ""))

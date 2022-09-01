@@ -10,6 +10,28 @@
 (def clr-dark "#1a1a1a")
 (def clr-light "#ffffcc")
 
+(defn update-larps [f larps]
+  (reduce #(update-in %1 [%2] f) larps (keys larps)))
+
+(defn available-larps []
+  (let [omit-years (:missing-years @app-state)
+        tag-filtering (pf/filter-by-plus-key)
+        search-query (:searching @app-state)
+        searching (stiii/search-fn search-query)
+        entries (:entries @app-state)]
+    (cond->> entries
+      (seq omit-years) (pf/filter-by-year omit-years)
+      (seq tag-filtering) (update-larps
+                            #(eduction (apply comp tag-filtering) %))
+      (seq search-query) (update-larps #(filter searching %)))))
+
+(defn last-year? [year]
+  (-> (available-larps)
+      (dissoc (js/parseInt (name year)))
+      vals
+      flatten
+      empty?))
+
 (defn toc-by-year [larps]
   (let [halfway (quot (count larps) 2)
         contents (for [row larps]
@@ -28,8 +50,10 @@
   (let [most-recent (frmt/year+key->int (:year+key (first larps)))]
     (into [:<>] (for [year (partition-by :year+key larps)]
                   (let [yr-int (frmt/year+key->int (:year+key (first year)))]
-                    [:details (if (= yr-int most-recent) {:open true :id (str yr-int "toc") :style {:cursor "pointer"}} {:id (str yr-int "toc") :style {:cursor "pointer"}})
-                     [:summary [:h2 (str  yr-int " — " (count year) " Games")]]
+                    [:details (if (= yr-int most-recent)
+                                {:open true :id (str yr-int "toc") :key (str yr-int "toc") :style {:cursor "pointer"}}
+                                {:id (str yr-int "toc") :key (str yr-int "toc") :style {:cursor "pointer"}})
+                     [:summary [:h2 (str  yr-int " — " (count year) " Game" (when-not (= 1 (count year)) "s"))]]
                      [toc-by-year year]])))))
 
 (defn key-counts [larps]
@@ -37,33 +61,38 @@
                         (frequencies (mapcat (comp keys k-h) larps)))))
 
 (defn filtered? [k k-header]
-  ((:filtering @app-state) [k k-header]))
+  (if (= :year+key k-header)
+    ((:missing-years @app-state) (js/parseInt (name k)))
+    ((:filtering @app-state) [k k-header])))
 
 (defn filter-toggle [k k-header]
-  (fn [] (if (filtered? k k-header)
-           (when-not (and (= k-header :year+key)
-                          (pf/last-year?))
-             (pf/remove-filter! k k-header))
-           (pf/add-filter! k k-header))))
+  (if (and (= k-header :year+key)
+           (last-year? k))
+      (fn []  nil)
+      (fn [] (if (filtered? k k-header)
+             (pf/remove-filter! k k-header)
+             (pf/add-filter! k k-header)))
+      ))
 
 (defn key-buttons
   ([key-header coll+key]
    [key-buttons key-header coll+key nil])
   ([key-header coll+key key-count]
-   (into [:<>] (for [[k v] coll+key]
-                 [:input {:type "button"
-                          :value (if (= key-header :year+key)
-                                   v
-                                   (str v
-                                        (when-let [quantity (k key-count)]
-                                          (str " (" quantity ")"))))
-                          :style (into {}
-                                       (if (filtered? k key-header)
-                                         {:background-color clr-dark :color clr-light}
-                                         {:background-color  clr-light :color clr-dark}))
-                          :class [(name key-header) "asp-btn"]
-                          :key (name k)
-                          :on-click (filter-toggle k key-header)}]))))
+   (into [:<>]
+         (for [[k v] coll+key]
+           [:input {:type "button"
+                    :value (if (= key-header :year+key)
+                             v
+                             (str v
+                                  (when-let [quantity (k key-count)]
+                                    (str " (" quantity ")"))))
+                    :style (into {}
+                                 (if (filtered? k key-header)
+                                   {:background-color clr-dark :color clr-light}
+                                   {:background-color  clr-light :color clr-dark}))
+                    :class [(name key-header) "asp-btn"]
+                    :key (name k)
+                    :on-click (filter-toggle k key-header)}]))))
 
 (defn filter-by-keys [larps keyword-header]
   (let [visible (r/atom 5)]
@@ -77,12 +106,12 @@
         [:div [:hr]
          [:label (if-not (= :year+key keyword-header)
                    (str "Filter by " (keyword-header headers))
-                   "Selected Years") ": "]
-         (key-buttons keyword-header (if (= :year+key keyword-header)
-                                       (sort-by
-                                         (comp - #(js/parseInt %) second)
-                                         (:year-range @app-state))
-                                       (take @visible ks)) k-count)
+                   "Filter out Years") ": "]
+         (key-buttons keyword-header
+                      (if (= :year+key keyword-header)
+                        (map #(vector (keyword (str %)) (str %))
+                             (:year-range @app-state))
+                        (take @visible ks)) k-count)
          (if-not (= :year+key keyword-header)
            (if (< @visible (count ks))
              [:input {:type "button"
@@ -103,14 +132,14 @@
                                 :color clr-light}
                         :class "extend-filter"
                         :on-click #(reset! visible 5)}]))
-           (when-not (pf/all-years?)
+           (when (seq (:missing-years @app-state))
              [:input {:type "button"
-                      :value (str "Select All")
+                      :value (str "Show All Years")
                       :style {:margin "0.1em 0.1em"
-                              :background-color  clr-light
-                              :color clr-dark}
-                      :on-click #(doseq [[yr _] (:year-range @app-state)]
-                                   (pf/add-filter! yr :year+key))}]))]))))
+                              :background-color  clr-dark
+                              :color clr-light}
+                      :on-click #(doseq [yr (:year-range @app-state)]
+                                   (pf/remove-filter! (str yr) :year+key))}]))]))))
 
 (defn mark-text
   ([text] (let [searching (s/trim (:searching @app-state))]
@@ -147,13 +176,13 @@
     [:a {:href (:link+url row)} (mark-text (:title row))]
     (mark-text (:title row))))
 
-(defn contents [larps]
-  (into [:div] (for [row larps]
+(defn contents [year larps]
+  (into [:div {:key (str year "listing") :id "contents"}] (for [row larps]
                  [:div {:key (:anchor+url row)}
-                  [:h2 {:id (:anchor+url row)} (larp-title row)]
-                  [:h3 "by " (mark-text (:designers row))]
+                  [:h2 {:id (:anchor+url row) :key (str (:anchor+url row) "header")} (larp-title row)]
+                  [:h3 {:key (str (:anchor+url row) "byline")} "by " (mark-text (:designers row))]
                   (when (seq (:not-eligible row))
-                    [:p "(Not Eligible for Awards)"])
+                    [:p {:key (str (:anchor+url row) (name :not-eligible))} "(Not Eligible for Awards)"])
                   (when (seq (:designers-work+url row))
                     (display-info :designers-work+url row "Other Work"))
                   (when (seq (:styles-of-play+key row))
@@ -171,31 +200,27 @@
                        (display-info k row))))])))
 
 (defn search-bar [larps]
-  (let [no-match (r/atom false)]
-    (fn [larps]
-      [:div [:label {:for "search"
-                     :style {:margin-right "0.3em"}} "Filter by Search: "]
-       [:input {:type "text" :id "search" :name "search"
-                :on-input #(let [q (.. % -target -value)]
-                             (if (stiii/fruitful-search? q larps)
-                               (do
-                                 (stiii/add-search! q)
-                                 (reset! no-match false))
-                               (do
-                                 (stiii/add-search! "")
-                                 (reset! no-match true))))}]
-       [:input {:type "button"
-                :value "Clear Search"
-                :style {:margin "0.1em 0.1em"
-                        :background-color  clr-dark
-                        :color clr-light}
-                :class "search-clear"
-                :on-click #(do
-                             (stiii/add-search! "")
-                             (reset! no-match false)
-                             (set!
-                              (.. (gdom/getElement "search") -value) ""))}]
-       (when @no-match [:span {:style {:color "#a44"}} " No Matches Found"])])))
+  (fn [larps]
+    [:div [:label {:for "search"
+                   :style {:margin-right "0.3em"}} "Filter by Search: "]
+     [:input {:type "text" :id "search" :name "search"
+              :on-input #(let [q (.. % -target -value)]
+                           (if (stiii/fruitful-search? q larps)
+                             (do
+                               (stiii/add-search! q)
+                               (stiii/change-match! false))
+                             (do
+                               (stiii/add-search! "")
+                               (stiii/change-match! true))))}]
+     [:input {:type "button"
+              :value "Clear Search"
+              :style {:margin "0.1em 0.1em"
+                      :background-color  clr-dark
+                      :color clr-light}
+              :class "search-clear"
+              :on-click #(stiii/clear-search! (gdom/getElement "search"))}]
+     (when (:no-match @app-state)
+       [:span {:style {:color "#a44"}} " No Matches Found"])]))
 
 (defn showcase 
   ([larps] (showcase larps 5))
@@ -211,24 +236,20 @@
    [filter-by-keys larps :year+key]
    [filter-by-keys larps :styles-of-play+key]
    [filter-by-keys larps :tags+key]
-   ])
+   [:input {:type "button"
+            :value "Clear All Filters"
+            :style {:margin "1em 0em"
+                    :background-color  clr-dark
+                    :color clr-light}
+            :on-click #(do 
+                         (pf/clear-filters! app-state)
+                         (stiii/clear-search! (gdom/getElement "search")))}]])
 
 (defn assembled-page []
-  (let [sorting (:sorting @app-state)
-        year-filtering (pf/build-year-filters)
-        tag-filtering (pf/build-tag-filters)
-        searching (stiii/search-fn (:searching @app-state))
-        entries (:entries @app-state)
-        larps (->> entries
-                   (filter year-filtering)
-                   (eduction (apply comp tag-filtering))
-                   (filter #(searching %))
-                   sorting)]
-    (if (seq larps)
-      [:div
-       [header larps]
-       (when (> (count larps) 5) [showcase larps])
-       [table-of-contents larps]
-       [contents larps]]
-      (doseq [[yr _] (:year-range @app-state)]
-        (pf/add-filter! yr :year+key)))))
+  (let [larps (available-larps)
+     flarps (flatten (vals larps))]
+    [:div
+     [header flarps]
+     (when (> (count flarps) 5) [showcase flarps])
+     [table-of-contents flarps]
+     (into [:<>] (for [[yr llist] larps] (contents yr llist)))]))
