@@ -91,14 +91,3 @@ table, th, td
   border-collapse: collapse;
   padding: 15px;
 }
-
-input
-{
-  margin: 0.1em 0.1em;
-  border-radius: 5px;
-  border: 1px solid #1a1a1a;
-}
-
-::-webkit-details-marker {
-  display: none;
-}

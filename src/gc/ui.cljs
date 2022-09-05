@@ -38,8 +38,7 @@
                    [:li {:key (str "toc" (:anchor+url row))}
                     [:a {:href (str "#" (:anchor+url row))}
                      (:title row) " by " (:designers row)]])]
-    [:table {:style {:border-collapse "separate" :border-radius "13px" :border "1px solid #c0c0c0"}}
-     [:tbody
+    [:table [:tbody
       [:tr
        (if (> 5 halfway)
          [:td {:style {:border "none"}} (into [:ul] contents)]
@@ -231,7 +230,7 @@
 
 (defn header [larps]
   [:div
-   [:h1 "Interactive Golden Cobra Archive"]
+   [:h1 "Interactive Golden Cobra Archive [BETA]"]
    [search-bar larps]
    [filter-by-keys larps :year+key]
    [filter-by-keys larps :styles-of-play+key]
