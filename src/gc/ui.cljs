@@ -37,7 +37,7 @@
         contents (for [row larps]
                    [:li {:key (str "toc" (:anchor+url row))}
                     [:a {:href (str "#" (:anchor+url row))}
-                     (:title row) " by " (:designers row)]])]
+                     (:title row)] [:br]  "– " (:designers row)])]
     [:table [:tbody
       [:tr
        (if (> 5 halfway)
@@ -45,15 +45,87 @@
          [:<> [:td  {:style {:border "none"}} (into [:ul] (take halfway contents))]
           [:td {:style {:border "none"}} (into [:ul] (drop halfway contents))]])]]]))
 
+(defn random-larps [larps quantity]
+  (->> larps
+       vals
+       flatten
+       shuffle
+       (take quantity)))
+
 (defn table-of-contents [larps]
-  (let [most-recent (frmt/year+key->int (:year+key (first larps)))]
-    (into [:<>] (for [year (partition-by :year+key larps)]
-                  (let [yr-int (frmt/year+key->int (:year+key (first year)))]
-                    [:details (if (= yr-int most-recent)
-                                {:open true :id (str yr-int "toc") :key (str yr-int "toc") :style {:cursor "pointer"}}
-                                {:id (str yr-int "toc") :key (str yr-int "toc") :style {:cursor "pointer"}})
-                     [:summary [:h2 (str  yr-int " — " (count year) " Game" (when-not (= 1 (count year)) "s"))]]
-                     [toc-by-year year]])))))
+  (let [open-tables (r/atom #{})
+        loc (r/atom nil)
+        showcase (r/atom (random-larps larps 4))]
+    (r/create-class 
+      {:component-did-update
+       (fn [] (when @loc 
+                (set! (.. js/window -location -href) @loc)
+                (reset! loc nil)
+                ))
+
+       :reagent-render
+       (fn [larps]
+         (into [:div {:style {:display "flex"
+                              :flex-flow "row wrap"
+                              :gap "1em"
+                              :align-content "space-around"}}]
+               (for [[table games] (into [["Random Showcase" @showcase]]
+                                         (seq larps))]
+                 [:div {:style {:background-color (if (zero? (count games))
+                                                    "#c0c0c0"
+                                                    "#ffc")
+                                :flex-basis (if (@open-tables table)
+                                              "100%"
+                                              300)
+                                :order (if (@open-tables table)
+                                         -1
+                                         1)
+                                :align-self "start"
+                                :flex-grow 1
+                                :overflow "hidden"
+                                :border "2px solid #c0c0c0"
+                                :border-radius "9px"
+                                :padding "0.2em"
+                                :margin "0.2em"
+                                :display "flex"
+                                :flex-flow "column nowrap"
+                                :align-content "space-between"
+                                }}
+                  [:h3 {:id (str table "toc") :key (str table "toc")
+                        :style {:margin 10
+                                :border-bottom "1px solid #1a1a1a"}}
+                   table
+                   (when (@open-tables table)
+                     (str " — " (count games) " Games"))]
+                  (when (zero? (count games))
+                    [:p {:style {:margin-left 10}}
+                     "Filters match no games for this year."])
+                  (if (@open-tables table)
+                    [toc-by-year games]
+                    (into [:ul] (for [row (take 3 (shuffle games))]
+                                  [:li {:key (str "toc" (:anchor+url row))}
+                                   [:a {:href (str "#" (:anchor+url row))}
+                                    (:title row)] [:br]  "– " (:designers row)])))
+                  (when (> (count games) 3)
+                    [:input {:type "button"
+                             :value (cond
+                                      (@open-tables table) "Collapse Card"
+                                      (= "Random Showcase" table) "Re-roll"
+                                      :else (str "+" (- (count games) 3) " more games"))
+                             :style {:margin "auto"
+                                     :background-color "#1a1a1a"
+                                     :color "#ffc"}
+                             :on-click 
+                             (if (= "Random Showcase" table)
+                               #(reset! showcase (random-larps larps 4))
+                               #(do
+                                (if (@open-tables table)
+                                  (swap! open-tables disj table)
+                                  (swap! open-tables conj table))
+                                (reset! loc
+                                        #_(.. js/window -location -href)
+                                        (str "#" table "toc"))
+                                ))}])])))})))
 
 (defn key-counts [larps]
   (zipmap key-headers (for [k-h key-headers]
@@ -178,8 +250,8 @@
 (defn contents [year larps]
   (into [:div {:key (str year "listing") :id "contents"}] (for [row larps]
                  [:div {:key (:anchor+url row)}
-                  [:h2 {:id (:anchor+url row) :key (str (:anchor+url row) "header")} (larp-title row)]
-                  [:h3 {:key (str (:anchor+url row) "byline")} "by " (mark-text (:designers row))]
+                  [:h3 {:id (:anchor+url row) :key (str (:anchor+url row) "header")} (larp-title row)]
+                  [:h4 {:key (str (:anchor+url row) "byline")} "by " (mark-text (:designers row))]
                   (when (seq (:not-eligible row))
                     [:p {:key (str (:anchor+url row) (name :not-eligible))} "(Not Eligible for Awards)"])
                   (when (seq (:designers-work+url row))
@@ -202,7 +274,7 @@
   (fn [larps]
     [:div [:label {:for "search"
                    :style {:margin-right "0.3em"}} "Filter by Search: "]
-     [:input {:type "text" :id "search" :name "search"
+     [:input {:type "search" :id "search" :name "search" :list "search-list"
               :on-input #(let [q (.. % -target -value)]
                            (if (stiii/fruitful-search? q larps)
                              (do
@@ -211,6 +283,9 @@
                              (do
                                (stiii/add-search! "")
                                (stiii/change-match! true))))}]
+     (into [:datalist {:id "search-list"}]
+           (for [designer (set (map :designers larps))]
+             [:option {:value (str \" designer \")}]))
      [:input {:type "button"
               :value "Clear Search"
               :style {:margin "0.1em 0.1em"
@@ -225,30 +300,34 @@
   ([larps] (showcase larps 5))
   ([larps quantity]
    [:details {:id "showcase" :style {:cursor "pointer"}}
-    [:summary [:h2 "Showcase — " (min quantity (count larps)) " Random Games"]]
+    [:summary [:h3 "Showcase — " (min quantity (count larps)) " Random Games"]]
     (toc-by-year (take quantity (shuffle larps)))]))
 
-(defn header [larps]
+(defn filter-section [larps]
+  [:details {:style {:outline "none"}} [:summary [:h3 "Apply Filters"]]
+  [search-bar larps]
+  [filter-by-keys larps :year+key]
+  [filter-by-keys larps :styles-of-play+key]
+  [filter-by-keys larps :tags+key]
+  [:input {:type "button"
+           :value "Clear All Filters"
+           :style {:margin "1em 0em"
+                   :background-color  clr-dark
+                   :color clr-light}
+           :on-click #(do 
+                        (pf/clear-filters! app-state)
+                        (stiii/clear-search! (gdom/getElement "search")))}]])
+
+(defn header []
   [:div
-   [:h1 "Interactive Golden Cobra Archive [BETA]"]
-   [search-bar larps]
-   [filter-by-keys larps :year+key]
-   [filter-by-keys larps :styles-of-play+key]
-   [filter-by-keys larps :tags+key]
-   [:input {:type "button"
-            :value "Clear All Filters"
-            :style {:margin "1em 0em"
-                    :background-color  clr-dark
-                    :color clr-light}
-            :on-click #(do 
-                         (pf/clear-filters! app-state)
-                         (stiii/clear-search! (gdom/getElement "search")))}]])
+   [:h2 "Interactive Golden Cobra Archive [BETA]"]])
 
 (defn assembled-page []
   (let [larps (available-larps)
      flarps (flatten (vals larps))]
     [:div
-     [header flarps]
-     (when (> (count flarps) 5) [showcase flarps])
-     [table-of-contents flarps]
+     [header]
+     [filter-section flarps]
+     [:details {:open true :style {:outline "none"}}
+      [:summary [:h3 "Table of Contents"]] [table-of-contents larps]]
      (into [:<>] (for [[yr llist] larps] (contents yr llist)))]))
