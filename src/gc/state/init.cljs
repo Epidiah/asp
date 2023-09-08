@@ -8,14 +8,7 @@
             [reagent.core :as r])
   (:import [goog.net XhrIo]))
 
-(defn g-sheets-url [doc-id year]
-  (str "https://docs.google.com/spreadsheets/d/"
-       doc-id
-       "/gviz/tq?tqx=out:csv&sheet="
-       year))
-
-(def doc-id "11_Vzo-uEPHFAwb4c-c7xJp5H8QYVuc7Ifour3EQZKZE")
-
+;; Contest Dates
 (def debut-year 2014)
 
 (def current-year
@@ -25,7 +18,15 @@
     (if (> 7 month) (dec year) year)))
 
 (def years-running (range debut-year (inc current-year)))
-(def year-range (reverse years-running))
+
+;; Google Nonsense
+(defn g-csv-url [doc-id year]
+  (str "https://docs.google.com/spreadsheets/d/"
+       doc-id
+       "/gviz/tq?tqx=out:csv&sheet="
+       year))
+
+(def doc-id "11_Vzo-uEPHFAwb4c-c7xJp5H8QYVuc7Ifour3EQZKZE")
 
 #_(defonce collected-larp-els (array-seq (gdom/getElementsByClass "larps")))
 
@@ -53,13 +54,13 @@
   (map (fn [row] (map #(s/trim %) row)) rows)))
 
 (defn csv->seq-table [csv]
-(let [rows (->> csv
-                s/trim
-                frmt/unescape
-                csv/parse
-                js->clj
-                (remove empty?))]
-  (map (fn [row] (map #(s/trim %) row)) rows)))
+  (let [rows (->> csv
+                  s/trim
+                  frmt/unescape
+                  csv/parse
+                  js->clj
+                  (remove empty?))]
+    (map (fn [row] (map #(s/trim %) row)) rows)))
 
 (defn format-keys
 "Takes a collect of strings and returns a collection of keywords"
@@ -180,22 +181,44 @@
                             :searching ""
                             :no-match false
                             :missing-years #{}
-                            :year-range year-range
                             :entries (sorted-map-by >)
                             #_#_:entries entries}))
 
-(defn fetch-data [yr]
+#_(defn ensure-unique-years [store xform]
+    (fn [yr data]
+      (let  [incoming (xform yr data)
+             previous (:entries store)
+             matches (filter (comp #{(incoming yr)} second) previous)
+             match-yrs (map first matches)
+             unique? (empty? matches)
+             earliest? (< yr (apply min match-yrs))]
+        (.log js/console (str "Checking: " incoming))
+        (cond
+          unique? (do (.log js/console (str "Matches: " matches)) incoming)
+          earliest? (do (doseq [m-yr match-yrs]
+                          (.log js/console (str "Removing " m-yr))
+                          (swap! store update :entries dissoc m-yr))
+                        incoming)
+          :else nil))))
+
+(defn fetch-data [url store xform yr]
   (let [callback (fn [_]
                    (this-as ^js bad-idea
-                     (swap! app-state
-                            update :entries
-                            merge (csv->map yr (.getResponseText bad-idea)))))]
-    (.send XhrIo (g-sheets-url doc-id yr) callback "GET" nil nil 1000)))
+                     (let [status (.getStatus bad-idea)
+                           response (.getResponseText bad-idea)]
+                       (when (and (<= 200 status) (> 400 status))
+                         (swap! store
+                                update :entries
+                                merge (xform yr response))))))]
+    (.send XhrIo url callback "GET" nil nil 1000)))
 
-(defn init-data []
-  (doseq [yr years-running #_#_:when (not= 2015 yr)] (fetch-data yr)))
+(defn init-data [store xform]
+  #_(doseq [yr years-running :when (not= 2015 yr)]
+      (fetch-data (g-csv-url doc-id yr) store xform yr))
+  (doseq [yr years-running]
+    (fetch-data (str "csv/" yr ".csv") store xform yr)))
 
-(init-data)
+(init-data app-state csv->map)
 
 (defn all-headers []
   (disj (->> (:entries @app-state)
@@ -216,3 +239,6 @@
 
 (defn txt-headers []
   (difference (all-headers) (key-headers) (url-headers)))
+
+(defn year-range []
+  (sort > (keys (:entries @app-state))))

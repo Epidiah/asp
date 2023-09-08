@@ -1,6 +1,6 @@
 (ns gc.ui
   (:require [clojure.string :as s]
-            [gc.state.init :refer [app-state key-headers]]
+            [gc.state.init :refer [app-state key-headers year-range]]
             [gc.utils.formats :as frmt]
             [gc.search-for-spock :as stiii]
             [gc.phantasmal-filters :as pf]
@@ -122,7 +122,7 @@
          (key-buttons keyword-header
                       (if (= :year+key keyword-header)
                         (map #(vector (keyword (str %)) (str %))
-                             (:year-range @app-state))
+                             (year-range))
                         (take @visible ks)) k-count)
          (if-not (= :year+key keyword-header)
            (if (< @visible (count ks))
@@ -153,7 +153,7 @@
                :style {:margin "0.1em 0.1em"
                        :background-color  clr-dark
                        :color clr-light}
-               :on-click #(doseq [yr (:year-range @app-state)]
+               :on-click #(doseq [yr (year-range)]
                             (pf/remove-filter! (str yr) :year+key))}]))]))))
 
 (defn mark-text

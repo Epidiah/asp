@@ -1,8 +1,8 @@
 (ns ^:figwheel-hooks gc.asp
   (:require
-    [gc.ui :refer [assembled-page]]
-    [goog.dom :as gdom]
-    [reagent.dom :as rdom]))
+   [gc.ui :refer [assembled-page]]
+   [goog.dom :as gdom]
+   [reagent.dom :as rdom]))
 
 (defn get-asp-element []
   (gdom/getElement "asp"))

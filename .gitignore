@@ -12,5 +12,6 @@ pom.xml
 .cpcache/
 .rebel_readline_history
 resources/public/cljs-out/
+resources/public/csv/
 .clj-kondo/.cache
 
