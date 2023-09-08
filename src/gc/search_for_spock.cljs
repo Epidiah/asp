@@ -2,11 +2,11 @@
   (:require [gc.state.init :refer [app-state key-headers txt-headers]]
             [clojure.string :as s]))
 
-(def searchable-keys 
-    (map (fn [k-h] #(s/join " " (vals (k-h %)))) key-headers))
+(def searchable-keys
+  (map (fn [k-h] #(s/join " " (vals (k-h %)))) (key-headers)))
 
 (def searchable-text
-  (into (vec txt-headers) searchable-keys))
+  (into (vec (txt-headers)) searchable-keys))
 
 (def escape-these #{\\ \^ \$ \* \+ \? \. \| \( \) \{ \} \[ \]})
 
@@ -32,14 +32,14 @@
   (let [queries (unquoted-input->queries user-input)
         quoted (->> user-input
                     (re-seq #"\".*?\"" )
-                    (map quoted-input->query) 
+                    (map quoted-input->query)
                     (take-nth 2))]
     (if (empty? quoted)
       queries
       (into quoted (remove
-                     #(s/includes?
-                        (s/join " " (into quoted "\"")) %)
-                     queries)))))
+                    #(s/includes?
+                      (s/join " " (into quoted "\"")) %)
+                    queries)))))
 
 (defn text-matches [user-input text]
   (remove nil?

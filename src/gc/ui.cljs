@@ -38,26 +38,37 @@
                    [:li {:key (str "toc" (:anchor+url row))}
                     [:a {:href (str "#" (:anchor+url row))}
                      (:title row) " by " (:designers row)]])]
-    [:table [:tbody
+    [:table
+     [:tbody
       [:tr
        (if (> 5 halfway)
          [:td {:style {:border "none"}} (into [:ul] contents)]
-         [:<> [:td  {:style {:border "none"}} (into [:ul] (take halfway contents))]
-          [:td {:style {:border "none"}} (into [:ul] (drop halfway contents))]])]]]))
+         [:<>
+          [:td  {:style {:border "none"}}
+           (into [:ul] (take halfway contents))]
+          [:td {:style {:border "none"}}
+           (into [:ul] (drop halfway contents))]])]]]))
 
 (defn table-of-contents [larps]
   (let [most-recent (frmt/year+key->int (:year+key (first larps)))]
-    (into [:<>] (for [year (partition-by :year+key larps)]
-                  (let [yr-int (frmt/year+key->int (:year+key (first year)))]
-                    [:details (if (= yr-int most-recent)
-                                {:open true :id (str yr-int "toc") :key (str yr-int "toc") :style {:cursor "pointer"}}
-                                {:id (str yr-int "toc") :key (str yr-int "toc") :style {:cursor "pointer"}})
-                     [:summary [:h2 (str  yr-int " — " (count year) " Game" (when-not (= 1 (count year)) "s"))]]
-                     [toc-by-year year]])))))
+    (into
+     [:<>]
+     (for [year (partition-by :year+key larps)]
+       (let [yr-int (frmt/year+key->int (:year+key (first year)))]
+         [:details
+          (if (= yr-int most-recent)
+            {:open true :id (str yr-int "toc")
+             :key (str yr-int "toc") :style {:cursor "pointer"}}
+            {:id (str yr-int "toc")
+             :key (str yr-int "toc") :style {:cursor "pointer"}})
+          [:summary
+           [:h2 (str yr-int " — " (count year) " Game"
+                     (when-not (= 1 (count year)) "s"))]]
+          [toc-by-year year]])))))
 
 (defn key-counts [larps]
-  (zipmap key-headers (for [k-h key-headers]
-                        (frequencies (mapcat (comp keys k-h) larps)))))
+  (zipmap (key-headers) (for [k-h (key-headers)]
+                          (frequencies (mapcat (comp keys k-h) larps)))))
 
 (defn filtered? [k k-header]
   (if (= :year+key k-header)
@@ -77,21 +88,23 @@
   ([key-header coll+key]
    [key-buttons key-header coll+key nil])
   ([key-header coll+key key-count]
-   (into [:<>]
-         (for [[k v] coll+key]
-           [:input {:type "button"
-                    :value (if (= key-header :year+key)
-                             v
-                             (str v
-                                  (when-let [quantity (k key-count)]
-                                    (str " (" quantity ")"))))
-                    :style (into {}
-                                 (if (filtered? k key-header)
-                                   {:background-color clr-dark :color clr-light}
-                                   {:background-color  clr-light :color clr-dark}))
-                    :class [(name key-header) "asp-btn"]
-                    :key (name k)
-                    :on-click (filter-toggle k key-header)}]))))
+   (into
+    [:<>]
+    (for [[k v] coll+key]
+      [:input
+       {:type "button"
+        :value (if (= key-header :year+key)
+                 v
+                 (str v (when-let [quantity (k key-count)]
+                          (str " (" quantity ")"))))
+        :style (into
+                {}
+                (if (filtered? k key-header)
+                  {:background-color clr-dark :color clr-light}
+                  {:background-color  clr-light :color clr-dark}))
+        :class [(name key-header) "asp-btn"]
+        :key (name k)
+        :on-click (filter-toggle k key-header)}]))))
 
 (defn filter-by-keys [larps keyword-header]
   (let [visible (r/atom 5)]
@@ -113,32 +126,35 @@
                         (take @visible ks)) k-count)
          (if-not (= :year+key keyword-header)
            (if (< @visible (count ks))
-             [:input {:type "button"
-                      :value (str "+ " (count (drop @visible ks))
-                                  " more "
-                                  (keyword-header headers))
-                      :style {:margin "0.1em 0.1em"
-                              :background-color  clr-dark
-                              :color clr-light}
-                      :class "extend-filter"
-                      :on-click #(reset! visible (count ks))}]
+             [:input
+              {:type "button"
+               :value (str "+ " (count (drop @visible ks))
+                           " more "
+                           (keyword-header headers))
+               :style {:margin "0.1em 0.1em"
+                       :background-color  clr-dark
+                       :color clr-light}
+               :class "extend-filter"
+               :on-click #(reset! visible (count ks))}]
              (when (> (count ks) 5)
-               [:input {:type "button"
-                        :value (str "Less "
-                                    (keyword-header headers))
-                        :style {:margin "0.1em 0.1em"
-                                :background-color  clr-dark
-                                :color clr-light}
-                        :class "extend-filter"
-                        :on-click #(reset! visible 5)}]))
+               [:input
+                {:type "button"
+                 :value (str "Less "
+                             (keyword-header headers))
+                 :style {:margin "0.1em 0.1em"
+                         :background-color  clr-dark
+                         :color clr-light}
+                 :class "extend-filter"
+                 :on-click #(reset! visible 5)}]))
            (when (seq (:missing-years @app-state))
-             [:input {:type "button"
-                      :value (str "Show All Years")
-                      :style {:margin "0.1em 0.1em"
-                              :background-color  clr-dark
-                              :color clr-light}
-                      :on-click #(doseq [yr (:year-range @app-state)]
-                                   (pf/remove-filter! (str yr) :year+key))}]))]))))
+             [:input
+              {:type "button"
+               :value (str "Show All Years")
+               :style {:margin "0.1em 0.1em"
+                       :background-color  clr-dark
+                       :color clr-light}
+               :on-click #(doseq [yr (:year-range @app-state)]
+                            (pf/remove-filter! (str yr) :year+key))}]))]))))
 
 (defn mark-text
   ([text] (let [searching (s/trim (:searching @app-state))]
@@ -159,16 +175,16 @@
 (defn display-info
   ([k row] (display-info k row (k (:headers row))))
   ([k row head]
-   (when (seq (k row)) 
+   (when (seq (k row))
      [:p {:key (str (:anchor+url row) (name k))} [:strong (str head ": ")]
-    (cond
-      (= k :year+key)
-      [:a {:href (str "#" (val (first (k row))) "toc")} (val (first (k row)))]
-      (s/ends-with? (name k) "+url")
-      (into [:<>] (interpose " + " (for [url (k row)] [:a {:href url} url])))
-      (s/ends-with? (name k) "+key")
-      [:a {:href (str "#" (:anchor+url row))} (key-buttons k (k row))]
-      :else (mark-text (k row)))])))
+      (cond
+        (= k :year+key)
+        [:a {:href (str "#" (val (first (k row))) "toc")} (val (first (k row)))]
+        (s/ends-with? (name k) "+url")
+        (into [:<>] (interpose " + " (for [url (k row)] [:a {:href url} url])))
+        (s/ends-with? (name k) "+key")
+        [:a {:href (str "#" (:anchor+url row))} (key-buttons k (k row))]
+        :else (mark-text (k row)))])))
 
 (defn larp-title [row]
   (if (seq (:link+url row))
@@ -176,27 +192,32 @@
     (mark-text (:title row))))
 
 (defn contents [year larps]
-  (into [:div {:key (str year "listing") :id "contents"}] (for [row larps]
-                 [:div {:key (:anchor+url row)}
-                  [:h2 {:id (:anchor+url row) :key (str (:anchor+url row) "header")} (larp-title row)]
-                  [:h3 {:key (str (:anchor+url row) "byline")} "by " (mark-text (:designers row))]
-                  (when (seq (:not-eligible row))
-                    [:p {:key (str (:anchor+url row) (name :not-eligible))} "(Not Eligible for Awards)"])
-                  (when (seq (:designers-work+url row))
-                    (display-info :designers-work+url row "Other Work"))
-                  (when (seq (:styles-of-play+key row))
-                    (display-info :styles-of-play+key row))
-                  (display-info :description row)
-                  (when (seq (:tags+key row))
-                    (display-info :tags+key row))
-                  (when (seq (:year+key row))
-                    (display-info :year+key row "Year Submitted"))
-                  (let [accounted-for [:anchor+url :title :designers :designers-work+url
-                                       :tags+key :styles-of-play+key :description
-                                       :not-eligible :link+url :year+key]]
-                    (doall
-                     (for [k (keys (apply dissoc (:headers row) accounted-for))]
-                       (display-info k row))))])))
+  (into
+   [:div {:key (str year "listing") :id "contents"}]
+   (for [row larps]
+     [:div {:key (:anchor+url row)}
+      [:h2 {:id (:anchor+url row) :key (str (:anchor+url row) "header")}
+       (larp-title row)]
+      [:h3 {:key (str (:anchor+url row) "byline")}
+       "by " (mark-text (:designers row))]
+      (when (seq (:not-eligible row))
+        [:p {:key (str (:anchor+url row) (name :not-eligible))}
+         "(Not Eligible for Awards)"])
+      (when (seq (:designers-work+url row))
+        (display-info :designers-work+url row "Other Work"))
+      (when (seq (:styles-of-play+key row))
+        (display-info :styles-of-play+key row))
+      (display-info :description row)
+      (when (seq (:tags+key row))
+        (display-info :tags+key row))
+      (when (seq (:year+key row))
+        (display-info :year+key row "Year Submitted"))
+      (let [accounted-for [:anchor+url :title :designers :designers-work+url
+                           :tags+key :styles-of-play+key :description
+                           :not-eligible :link+url :year+key]]
+        (doall
+         (for [k (keys (apply dissoc (:headers row) accounted-for))]
+           (display-info k row))))])))
 
 (defn search-bar [larps]
   (fn [larps]
@@ -221,7 +242,7 @@
      (when (:no-match @app-state)
        [:span {:style {:color "#a44"}} " No Matches Found"])]))
 
-(defn showcase 
+(defn showcase
   ([larps] (showcase larps 5))
   ([larps quantity]
    [:details {:id "showcase" :style {:cursor "pointer"}}
@@ -240,7 +261,7 @@
             :style {:margin "1em 0em"
                     :background-color  clr-dark
                     :color clr-light}
-            :on-click #(do 
+            :on-click #(do
                          (pf/clear-filters! app-state)
                          (stiii/clear-search! (gdom/getElement "search")))}]])
 

@@ -3,105 +3,134 @@
             [clojure.set :refer [difference]]
             [gc.sort-n-sorcery :as sns]
             [gc.utils.formats :as frmt]
-            [goog.dom :as gdom]
+            #_[goog.dom :as gdom]
             [goog.labs.format.csv :as csv]
-            [reagent.core :as r]))
+            [reagent.core :as r])
+  (:import [goog.net XhrIo]))
 
-(defonce collected-larp-els (array-seq (gdom/getElementsByClass "larps")))
+(defn g-sheets-url [doc-id year]
+  (str "https://docs.google.com/spreadsheets/d/"
+       doc-id
+       "/gviz/tq?tqx=out:csv&sheet="
+       year))
 
-(defn id->years [coll]
-  (map #(js/parseInt (.getAttribute % "id")) coll))
+(def doc-id "11_Vzo-uEPHFAwb4c-c7xJp5H8QYVuc7Ifour3EQZKZE")
 
-(def year-range
-  (->> collected-larp-els
-       id->years 
-       ((juxt #(apply min %) #(inc (apply max %))))
-       (apply range)
-       reverse))
+(def debut-year 2014)
 
-(defn csv-div->seq-table 
-  "Takes a div containing csv data and returns a seq of rows of table data
+(def current-year
+  (let [now   (js/Date.)
+        month (.getMonth now)
+        year  (.getFullYear now)]
+    (if (> 7 month) (dec year) year)))
+
+(def years-running (range debut-year (inc current-year)))
+(def year-range (reverse years-running))
+
+#_(defonce collected-larp-els (array-seq (gdom/getElementsByClass "larps")))
+
+#_(defn id->years [coll]
+(map #(js/parseInt (.getAttribute % "id")) coll))
+
+#_(def year-range
+(->> collected-larp-els
+     id->years
+     ((juxt #(apply min %) #(inc (apply max %))))
+     (apply range)
+     reverse))
+
+#_(defn csv-div->seq-table
+"Takes a div containing csv data and returns a seq of rows of table data
   where the first row contains the headers."
-  [csv-div]
-  (let [rows (->> csv-div
-                  .-innerHTML
-                  s/trim
-                  frmt/unescape
-                  csv/parse
-                  js->clj
-                  (remove empty?))]
-    (map (fn [row] (map #(s/trim %) row)) rows)))
+[csv-div]
+(let [rows (->> csv-div
+                .-innerHTML
+                s/trim
+                frmt/unescape
+                csv/parse
+                js->clj
+                (remove empty?))]
+  (map (fn [row] (map #(s/trim %) row)) rows)))
 
-(defn format-keys 
-  "Takes a collect of strings and returns a collection of keywords"
-  [coll]
-  (->> coll
-       (map
-         #(-> %
-              (frmt/format-key)
-              keyword))))
+(defn csv->seq-table [csv]
+(let [rows (->> csv
+                s/trim
+                frmt/unescape
+                csv/parse
+                js->clj
+                (remove empty?))]
+  (map (fn [row] (map #(s/trim %) row)) rows)))
 
-(defn format-key-map 
-  "Takes a string representing a csv of headers and returns a map
+(defn format-keys
+"Takes a collect of strings and returns a collection of keywords"
+[coll]
+(->> coll
+     (map
+      #(-> %
+           (frmt/format-key)
+           keyword))))
+
+(defn format-key-map
+"Takes a string representing a csv of headers and returns a map
   that associates the keyword for each header with the plain string."
-  [key-csv]
-  (let [keyring (->> (s/replace key-csv \; \,)
-                     csv/parse
-                     js->clj
-                     flatten
-                     (map #(s/trim %)))]
-    (zipmap (format-keys keyring) keyring)))
+[key-csv]
+(let [keyring (->> (s/replace key-csv \; \,)
+                   csv/parse
+                   js->clj
+                   flatten
+                   (map #(s/trim %)))]
+  (zipmap (format-keys keyring) keyring)))
 
 (defn format-url-vector
-  "Takes a string representing one or more urls and returns a vector
+"Takes a string representing one or more urls and returns a vector
   of those urls as individual strings."
-  [url-csv]
-  (->> url-csv
-      csv/parse
-      js->clj
-      flatten
-      (map #(s/trim %))
-      vec))
+[url-csv]
+(->> url-csv
+     csv/parse
+     js->clj
+     flatten
+     (map #(s/trim %))
+     vec))
 
-(defn create-key-maps 
+(defn create-key-maps
   "Takes a map representing a row of table data and returns a new map
   where all columns tagged with `+key` at the end now hold maps of the
   their contents in the format of {:key-word \"Key word\"}"
   [row]
   (into {} (map (fn [[k v]]
-         (if (s/ends-with? (name k) "+key")
-           [k (format-key-map v)]
-           [k v]))
-       row)))
+                  (if (s/ends-with? (name k) "+key")
+                    [k (format-key-map v)]
+                    [k v]))
+                row)))
 
 (defn create-url-vectors
-  [row]
-  (map (fn [[k v]]
-         (if (s/ends-with? (name k) "+url")
-           [k (format-url-vector v)]
-           [k v]))
-       row))
+[row]
+(map (fn [[k v]]
+       (if (s/ends-with? (name k) "+url")
+         [k (format-url-vector v)]
+         [k v]))
+     row))
 
 (defn add-anchors
-  "Adds a {:anchor+url URL} map to each row of data in a map.
+"Adds a {:anchor+url URL} map to each row of data in a map.
   URL is generated using k and first 7 letters of the title."
-  [rows k]
-  (map (fn [row] (-> row
-                     (assoc :anchor+url (str k (:title row)))
-                     (assoc-in [:headers :anchor+url] "Anchor")))
-       rows))
+[rows k]
+(map (fn [row] (-> row
+                   (assoc :anchor+url (str k (:title row)))
+                   (assoc-in [:headers :anchor+url] "Anchor")))
+     rows))
 
-(defn clean-header 
-  "Cleans the +url and +key tags off of the string representation of 
+(defn clean-header
+  "Cleans the +url and +key tags off of the string representation of
   a column header."
   [header]
   (let [tester (s/lower-case header)]
     (if (or (s/ends-with? tester "+url")
-          (s/ends-with? tester "+key"))
-    (first (s/split header #"\+"))
-    header)))
+            (s/ends-with? tester "+key"))
+      (first (s/split header #"\+"))
+      header)))
 
-(defn seq-table->map 
+(defn seq-table->map
   "Takes a seq of seqs representing a table where the first seq
   is the column headers and each seq after that is a row of data.
   Returns a seq of maps associating a keyword header to its data cell.
@@ -122,37 +151,68 @@
                        (assoc :headers header-map)))
          rows)))
 
-(defn div->map
-  "Takes a div of csv larp data and transforms it into a map of that data."
-  [div]
-  (let [year (.-id div)
-        entries (-> div
-                    csv-div->seq-table
-                    (seq-table->map "Year+key" year)
-                    (add-anchors year))]
-    {(js/parseInt year) (sort-by sns/sort-by-title entries)}))
+#_(defn div->map
+    "Takes a div of csv larp data and transforms it into a map of that data."
+    [div]
+    (let [year (.-id div)
+          entries (-> div
+                      csv-div->seq-table
+                      (seq-table->map "Year+key" year)
+                      (add-anchors year))]
+      {(js/parseInt year) (sort-by sns/sort-by-title entries)}))
 
-(defonce entries (reduce into (sorted-map-by >) (map div->map collected-larp-els)))
+(defn csv->map
+  [year-int csv]
+  (let  [year-str (str year-int)
+         entries (-> csv
+                     csv->seq-table
+                     (seq-table->map "Year+key" year-str)
+                     (add-anchors year-str))]
+    {year-int (sort-by sns/sort-by-title entries)}))
+
+#_(defonce entries (#_reduce
+                    into (sorted-map-by >)
+                    (reduce-kv csv->map {}
+                               @contest-map)
+                    #_(map div->map collected-larp-els)))
 
 (defonce app-state (r/atom {:filtering #{}
                             :searching ""
                             :no-match false
                             :missing-years #{}
                             :year-range year-range
-                            :entries entries}))
+                            :entries (sorted-map-by >)
+                            #_#_:entries entries}))
 
-(defonce all-headers (disj (->> (:entries @app-state)
-                                vals
-                                flatten
-                                (mapcat keys)
-                                (into #{})) :headers))
+(defn fetch-data [yr]
+  (let [callback (fn [_]
+                   (this-as ^js bad-idea
+                     (swap! app-state
+                            update :entries
+                            merge (csv->map yr (.getResponseText bad-idea)))))]
+    (.send XhrIo (g-sheets-url doc-id yr) callback "GET" nil nil 1000)))
 
-(defonce key-headers (->> all-headers
-                          (filter #(s/ends-with? (name %) "+key"))
-                          (into #{})))
+(defn init-data []
+  (doseq [yr years-running #_#_:when (not= 2015 yr)] (fetch-data yr)))
 
-(defonce url-headers (->> all-headers
-                          (filter #(s/ends-with? (name %) "+url"))
-                          (into #{})))
+(init-data)
 
-(defonce txt-headers (difference all-headers key-headers url-headers))
+(defn all-headers []
+  (disj (->> (:entries @app-state)
+             vals
+             flatten
+             (mapcat keys)
+             (into #{})) :headers))
+
+(defn key-headers []
+  (->> (all-headers)
+       (filter #(s/ends-with? (name %) "+key"))
+       (into #{})))
+
+(defn url-headers []
+  (->> (all-headers)
+       (filter #(s/ends-with? (name %) "+url"))
+       (into #{})))
+
+(defn txt-headers []
+  (difference (all-headers) (key-headers) (url-headers)))
