@@ -12,14 +12,7 @@
 (defn id->years [coll]
   (map #(js/parseInt (.getAttribute % "id")) coll))
 
-(def year-range
-  (->> collected-larp-els
-       id->years 
-       ((juxt #(apply min %) #(inc (apply max %))))
-       (apply range)
-       reverse))
-
-(defn csv-div->seq-table 
+(defn csv-div->seq-table
   "Takes a div containing csv data and returns a seq of rows of table data
   where the first row contains the headers."
   [csv-div]
@@ -32,16 +25,16 @@
                   (remove empty?))]
     (map (fn [row] (map #(s/trim %) row)) rows)))
 
-(defn format-keys 
+(defn format-keys
   "Takes a collect of strings and returns a collection of keywords"
   [coll]
   (->> coll
        (map
-         #(-> %
-              (frmt/format-key)
-              keyword))))
+        #(-> %
+             (frmt/format-key)
+             keyword))))
 
-(defn format-key-map 
+(defn format-key-map
   "Takes a string representing a csv of headers and returns a map
   that associates the keyword for each header with the plain string."
   [key-csv]
@@ -63,16 +56,16 @@
       (map #(s/trim %))
       vec))
 
-(defn create-key-maps 
+(defn create-key-maps
   "Takes a map representing a row of table data and returns a new map
   where all columns tagged with `+key` at the end now hold maps of the
   their contents in the format of {:key-word \"Key word\"}"
   [row]
   (into {} (map (fn [[k v]]
-         (if (s/ends-with? (name k) "+key")
-           [k (format-key-map v)]
-           [k v]))
-       row)))
+                  (if (s/ends-with? (name k) "+key")
+                    [k (format-key-map v)]
+                    [k v]))
+                row)))
 
 (defn create-url-vectors
   [row]
@@ -91,17 +84,17 @@
                      (assoc-in [:headers :anchor+url] "Anchor")))
        rows))
 
-(defn clean-header 
-  "Cleans the +url and +key tags off of the string representation of 
+(defn clean-header
+  "Cleans the +url and +key tags off of the string representation of
   a column header."
   [header]
   (let [tester (s/lower-case header)]
     (if (or (s/ends-with? tester "+url")
-          (s/ends-with? tester "+key"))
-    (first (s/split header #"\+"))
-    header)))
+            (s/ends-with? tester "+key"))
+      (first (s/split header #"\+"))
+      header)))
 
-(defn seq-table->map 
+(defn seq-table->map
   "Takes a seq of seqs representing a table where the first seq
   is the column headers and each seq after that is a row of data.
   Returns a seq of maps associating a keyword header to its data cell.
@@ -130,29 +123,6 @@
                     csv-div->seq-table
                     (seq-table->map "Year+key" year)
                     (add-anchors year))]
-    {(js/parseInt year) (sort-by sns/sort-by-title entries)}))
+    {(js/parseInt year) (sort-by sns/sortable-title entries)}))
 
 (defonce entries (reduce into (sorted-map-by >) (map div->map collected-larp-els)))
-
-(defonce app-state (r/atom {:filtering #{}
-                            :searching ""
-                            :no-match false
-                            :missing-years #{}
-                            :year-range year-range
-                            :entries entries}))
-
-(defonce all-headers (disj (->> (:entries @app-state)
-                                vals
-                                flatten
-                                (mapcat keys)
-                                (into #{})) :headers))
-
-(defonce key-headers (->> all-headers
-                          (filter #(s/ends-with? (name %) "+key"))
-                          (into #{})))
-
-(defonce url-headers (->> all-headers
-                          (filter #(s/ends-with? (name %) "+url"))
-                          (into #{})))
-
-(defonce txt-headers (difference all-headers key-headers url-headers))

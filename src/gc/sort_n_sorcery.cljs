@@ -1,5 +1,5 @@
 (ns gc.sort-n-sorcery
-  (:require [clojure.string :as s]
+  (:require [clojure.string :as str]
             [gc.utils.formats :as frmt]))
 
 (defn sort-by-year
@@ -10,26 +10,21 @@
       frmt/year+key->int
       -))
 
-(defn sort-by-title
-  "Sorts entries in alphabetical order by title, ignoring the
-  articles (a/the) at the front of those titles"
-  [row]
-  (let [title (s/lower-case (:title row))]
-    (cond-> (:title row)
-      (s/starts-with? title "#") (subs 1)
-      (s/starts-with? title "(") (subs 1)
-      (s/starts-with? title "[") (subs 1)
-      (s/starts-with? title "\"") (subs 1)
-      (s/starts-with? title "'") (subs 1)
-      (s/starts-with? title "『") (subs 1)
-      (s/starts-with? title "the ") (subs 4)
-      (s/starts-with? title "a ") (subs 2))))
-
-(defn default-sort 
-  "Sorts by year, most recent first, and then alphabetically by title."
-  [row]
-  (sort-by (juxt
-             sort-by-year
-             sort-by-title)
-           row))
-
+(defn sortable-title
+  "Produces a title for the row in lower-case and without the articles
+  (a/the)or extraneous punctuation at the front.
+  Suitable for alphabetical sorting.
+  I'm afraid you're going to have to manually add to this list
+  as more titles come in."
+  [base-title]
+  (loop [title (str/lower-case (str base-title))]
+    (cond
+      (str/starts-with? title "#")    (recur (subs title 1))
+      (str/starts-with? title "(")    (recur (subs title 1))
+      (str/starts-with? title "[")    (recur (subs title 1))
+      (str/starts-with? title "\"")   (recur (subs title 1))
+      (str/starts-with? title "'")    (recur (subs title 1))
+      (str/starts-with? title "『")   (recur (subs title 1))
+      (str/starts-with? title "the ") (recur (subs title 4))
+      (str/starts-with? title "a ")   (recur (subs title 2))
+      :else                           title)))
