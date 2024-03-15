@@ -1,6 +1,5 @@
 (ns gc.state.load-larps
   (:require
-   [gc.sort-n-sorcery :as sns]
    [clojure.string :as str]
    [goog.labs.format.csv :as csv])
   (:import [goog.net XhrIo]))
@@ -128,7 +127,11 @@
   [s]
   (let [low-s (str/lower-case s)]
     (or (str/starts-with? low-s "http")
-        (str/starts-with? low-s "www."))))
+        (str/starts-with? low-s "www.")
+        (str/ends-with? low-s "/")
+        (str/ends-with? low-s ".com")
+        (str/ends-with? low-s ".org")
+        (str/ends-with? low-s ".edu"))))
 
 (def update-url-vectors
   "Takes a map representing row data and transforms the vals for
@@ -167,14 +170,14 @@
   an entry to the row that represents a hopefully unique id attribute
   for the inevitable element. `prefix` is probably the year of the
   entry."
-  [rows prefix]
+  [rows #_prefix]
   (map (fn [row]
          (-> row
-             (assoc :id+url (str prefix
-                                 (safe-format (:title row))
-                                 "-by-"
-                                 (safe-format (:designers row))))
-             (assoc-in [:headers :id+url] "Id")))
+             (assoc :anchor+url  (str "anchor" (hash row )) #_(str prefix
+                                                                   (safe-format (:title row))
+                                                                   "-by-"
+                                                                   (safe-format (:designers row))))
+             (assoc-in [:headers :anchor+url] "Anchor")))
        rows))
 
 (defn csv-str->seq-table
@@ -216,10 +219,9 @@
 
 (defn csv->map
   [csv-title csv-str]
-  (let  [anchor-prefix (str "asp-" csv-title "-")
-         entries (-> csv-str
+  (let  [entries (-> csv-str
                      csv-str->seq-table
                      (seq-table->map "Year" csv-title)
-                     (add-ids anchor-prefix)
+                     add-ids
                      )]
     {csv-title (sort-by (comp sortable-title :title) entries)}))

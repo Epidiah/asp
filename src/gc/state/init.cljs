@@ -1,11 +1,8 @@
 (ns gc.state.init
-  (:require [clojure.string :as s]
-            [clojure.set :refer [difference]]
-            [gc.sort-n-sorcery :as sns]
+  (:require [clojure.string :as str]
             [gc.utils.formats :as frmt]
             [goog.dom :as gdom]
-            [goog.labs.format.csv :as csv]
-            [reagent.core :as r]))
+            [goog.labs.format.csv :as csv]))
 
 (defonce collected-larp-els (array-seq (gdom/getElementsByClass "larps")))
 
@@ -18,12 +15,12 @@
   [csv-div]
   (let [rows (->> csv-div
                   .-innerHTML
-                  s/trim
+                  str/trim
                   frmt/unescape
                   csv/parse
                   js->clj
                   (remove empty?))]
-    (map (fn [row] (map #(s/trim %) row)) rows)))
+    (map (fn [row] (map #(str/trim %) row)) rows)))
 
 (defn format-keys
   "Takes a collect of strings and returns a collection of keywords"
@@ -38,11 +35,11 @@
   "Takes a string representing a csv of headers and returns a map
   that associates the keyword for each header with the plain string."
   [key-csv]
-  (let [keyring (->> (s/replace key-csv \; \,)
+  (let [keyring (->> (str/replace key-csv \; \,)
                      csv/parse
                      js->clj
                      flatten
-                     (map #(s/trim %)))]
+                     (map #(str/trim %)))]
     (zipmap (format-keys keyring) keyring)))
 
 (defn format-url-vector
@@ -50,11 +47,11 @@
   of those urls as individual strings."
   [url-csv]
   (->> url-csv
-      csv/parse
-      js->clj
-      flatten
-      (map #(s/trim %))
-      vec))
+       csv/parse
+       js->clj
+       flatten
+       (map #(str/trim %))
+       vec))
 
 (defn create-key-maps
   "Takes a map representing a row of table data and returns a new map
@@ -62,7 +59,7 @@
   their contents in the format of {:key-word \"Key word\"}"
   [row]
   (into {} (map (fn [[k v]]
-                  (if (s/ends-with? (name k) "+key")
+                  (if (str/ends-with? (name k) "+key")
                     [k (format-key-map v)]
                     [k v]))
                 row)))
@@ -70,17 +67,16 @@
 (defn create-url-vectors
   [row]
   (map (fn [[k v]]
-         (if (s/ends-with? (name k) "+url")
+         (if (str/ends-with? (name k) "+url")
            [k (format-url-vector v)]
            [k v]))
        row))
 
 (defn add-anchors
-  "Adds a {:anchor+url URL} map to each row of data in a map.
-  URL is generated using k and first 7 letters of the title."
-  [rows k]
+  "Adds a unique url fragment to the row map under the key `:anchor+url`."
+  [rows]
   (map (fn [row] (-> row
-                     (assoc :anchor+url (str k (:title row)))
+                     (assoc :anchor+url (str "anchor" (hash row)))
                      (assoc-in [:headers :anchor+url] "Anchor")))
        rows))
 
@@ -88,10 +84,10 @@
   "Cleans the +url and +key tags off of the string representation of
   a column header."
   [header]
-  (let [tester (s/lower-case header)]
-    (if (or (s/ends-with? tester "+url")
-            (s/ends-with? tester "+key"))
-      (first (s/split header #"\+"))
+  (let [tester (str/lower-case header)]
+    (if (or (str/ends-with? tester "+url")
+            (str/ends-with? tester "+key"))
+      (first (str/split header #"\+"))
       header)))
 
 (defn seq-table->map
@@ -115,14 +111,33 @@
                        (assoc :headers header-map)))
          rows)))
 
+(defn sortable-title
+  "Produces a title for the row in lower-case and without the articles
+  (a/the)or extraneous punctuation at the front.
+  Suitable for alphabetical sorting.
+  I'm afraid you're going to have to manually add to this list
+  as more titles come in."
+  [base-title]
+  (loop [title (str/lower-case (str base-title))]
+    (cond
+      (str/starts-with? title "#")    (recur (subs title 1))
+      (str/starts-with? title "(")    (recur (subs title 1))
+      (str/starts-with? title "[")    (recur (subs title 1))
+      (str/starts-with? title "\"")   (recur (subs title 1))
+      (str/starts-with? title "'")    (recur (subs title 1))
+      (str/starts-with? title "『")   (recur (subs title 1))
+      (str/starts-with? title "the ") (recur (subs title 4))
+      (str/starts-with? title "a ")   (recur (subs title 2))
+      :else                           title)))
+
 (defn div->map
   "Takes a div of csv larp data and transforms it into a map of that data."
   [div]
-  (let [year (.-id div)
+  (let [year (parse-long (.-id div))
         entries (-> div
                     csv-div->seq-table
-                    (seq-table->map "Year+key" year)
-                    (add-anchors year))]
-    {(js/parseInt year) (sort-by sns/sortable-title entries)}))
+                    (seq-table->map "Year" year)
+                    add-anchors)]
+    {year (sort-by (comp sortable-title :title) entries)}))
 
 (defonce entries (reduce into (sorted-map-by >) (map div->map collected-larp-els)))

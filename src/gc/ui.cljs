@@ -1,7 +1,6 @@
 (ns gc.ui
-  (:require [clojure.string :as s]
+  (:require [clojure.string :as str]
             [gc.state.state :as state]
-            [gc.utils.formats :as frmt]
             [gc.sieve :as sieve]
             [goog.dom :as gdom]
             [goog.functions :as gfun]
@@ -9,13 +8,6 @@
 
 (def clr-dark "#1a1a1a")
 (def clr-light "#ffffcc")
-
-(defn last-year? [year]
-  (-> @state/results
-      (dissoc (js/parseInt (name year)))
-      vals
-      flatten
-      empty?))
 
 (defn toc-by-year [larps]
   (let [halfway (quot (count larps) 2)
@@ -27,28 +19,30 @@
     [:table [:tbody
              [:tr
               (if (> 5 halfway)
-                [:td {:style {:border "none"}} (into [:ul] contents)]
-                [:<> [:td  {:style {:border "none"}} (into [:ul] (take halfway contents))]
-                 [:td {:style {:border "none"}} (into [:ul] (drop halfway contents))]])]]]))
+                [:td {:style {:border "none"}}
+                 (into [:ul] contents)]
+                [:<> [:td  {:style {:border "none"}}
+                      (into [:ul] (take halfway contents))]
+                 [:td {:style {:border "none"}}
+                  (into [:ul] (drop halfway contents))]])]]]))
 
 (defn table-of-contents []
-  (let [larps @state/flat-entries]
-    (when (seq larps)
-      (let [most-recent (frmt/year+key->int (:year+key (first larps)))]
-        [:<>
-         (doall
-          (for [year (partition-by :year+key larps)]
-            (let [yr-int (frmt/year+key->int (:year+key (first year)))]
-              [:details
-               {:id    (str yr-int "toc")
-                :key   (str yr-int "toc")
-                :open  (when (= yr-int most-recent) true)
-                :hidden (not (@state/visible-years yr-int))
-                :style {:cursor "pointer"}}
-               [:summary
-                [:h2 (str yr-int " — " (count year) " Game"
-                          (when-not (= 1 (count year)) "s"))]]
-               [toc-by-year year]])))]))))
+  (let [visible-larps (into (sorted-map-by >) @sieve/filtered-entries)
+        most-recent (apply max (keys visible-larps))]
+    [:<>
+     (doall
+      (for [[year larps] visible-larps
+            :let [yr-count (count larps)]]
+        [:details
+         {:id     (str "toc" year)
+          :key    (str "toc" year)
+          :open   (when (= year most-recent) true)
+          :hidden (zero? yr-count)
+          :style  {:cursor "pointer"}}
+         [:summary
+          [:h2 (str year " — " yr-count " Game"
+                    (when-not (= 1 yr-count) "s"))]]
+         [toc-by-year larps]]))]))
 
 (defn key-counts [larps]
   (zipmap @state/key-headers
@@ -56,19 +50,39 @@
             (frequencies (mapcat (comp keys k-h) larps)))))
 
 (defn filtered? [k k-header]
-  (if (= :year+key k-header)
-    (not (@state/visible-years (js/parseInt (name k))))
-    (@state/filtering [k k-header])))
+  (@state/filters [k k-header]))
+
+(defn year-toggle [year]
+  (fn [] (when-not (= 1 (count @state/visible-years))
+           (if (@state/visible-years year)
+             (sieve/add-year! year)
+             (sieve/remove-year! year)))))
 
 (defn filter-toggle [k k-header]
-  (if (and (= k-header :year+key)
-           (last-year? k))
-    (fn []  nil)
-    (fn [] (if (filtered? k k-header)
-             (sieve/remove-filter! k k-header)
-             (sieve/add-filter! k k-header))
-      (sieve/update-sieve!))
-    ))
+  (fn [] (if (filtered? k k-header)
+           (sieve/remove-filter! k k-header)
+           (sieve/add-filter! k k-header))))
+
+(defn year-buttons []
+  [:<>
+   (doall
+    (for [year @state/all-years]
+      ^{:key year}
+      [:input {:type     "button"
+               :value    year
+               :style
+               (if (@state/visible-years year)
+                 {:background-color clr-light :color clr-dark}
+                 {:background-color clr-dark :color clr-light})
+               :class    "asp-btn"
+               :on-click (year-toggle year)}]
+      #_[:button {:style
+                  (if (@state/visible-years year)
+                    {:background-color clr-light :color clr-dark}
+                    {:background-color clr-dark :color clr-light})
+                  :class    "asp-btn"
+                  :on-click (year-toggle year)}
+         year]))])
 
 (defn key-buttons
   ([key-header coll+key]
@@ -77,111 +91,129 @@
    [:<>
     (doall
      (for [[k v] coll+key]
-       [:input {:type "button"
-                :value (if (= key-header :year+key)
-                         v
-                         (str v
-                              (when-let [quantity (k key-count)]
-                                (str " (" quantity ")"))))
-                :style (into {}
-                             (if (filtered? k key-header)
-                               {:background-color clr-dark :color clr-light}
-                               {:background-color  clr-light :color clr-dark}))
-                :class [(name key-header) "asp-btn"]
-                :key (name k)
-                :on-click (filter-toggle k key-header)}]))]))
+       ^{:key k}
+       [:input {:type     "button"
+                :value    (str v
+                               (when-let [quantity (k key-count)]
+                                 (str " (" quantity ")")))
+                :style
+                (if (filtered? k key-header)
+                  {:background-color clr-dark :color clr-light}
+                  {:background-color clr-light :color clr-dark})
+                :class    "asp-btn"
+                :on-click (filter-toggle k key-header)}
+        #_[:button {:style
+                    (if (filtered? k key-header)
+                      {:background-color clr-dark :color clr-light}
+                      {:background-color clr-light :color clr-dark})
+                    :class    "asp-btn"
+                    :on-click (filter-toggle k key-header)}
+           (str v
+                (when-let [quantity (k key-count)]
+                  (str " (" quantity ")")))]]))]))
+
+(defn filter-by-year []
+  [:div [:hr]
+   [:label "Filter out Years: "]
+   [year-buttons]
+   [:input {:type     "button"
+            :hidden   (every? @state/visible-years @state/all-years)
+            :value    "Show All Years"
+            :style    {:margin           "0.1em 0.1em"
+                       :background-color clr-dark
+                       :color            clr-light}
+            :on-click (fn []
+                        (doseq [yr @state/all-years]
+                          (sieve/remove-year! yr)))}]])
 
 (defn filter-by-keys [keyword-header]
   (r/with-let [visible (r/atom 5)]
-    (let [larps   @state/flat-results
+    (let [larps   @sieve/result-list
           k-count (keyword-header (key-counts larps))
-          sort-fn (if (= keyword-header :year+key)
-                    #(- (js/parseInt (second %)))
-                    #(- ((first %) k-count)))
+          sort-fn #(- ((first %) k-count))
           ks      (sort-by sort-fn (apply merge (map keyword-header larps)))
           headers (apply merge (map :headers larps))]
       [:div [:hr]
-       [:label (if-not (= :year+key keyword-header)
-                 (str "Filter by " (keyword-header headers))
-                 "Filter out Years") ": "]
-       [key-buttons keyword-header
-        (if (= :year+key keyword-header)
-          (map #(vector (keyword (str %)) (str %))
-               @state/all-years)
-          (take @visible ks)) k-count]
-       (if-not (= :year+key keyword-header)
-         (if (< @visible (count ks))
+       [:label (str "Filter by " (keyword-header headers)) ": "]
+       [key-buttons keyword-header (take @visible ks) k-count]
+       (if (< @visible (count ks))
+         [:input {:type     "button"
+                  :value    (str "+ " (count (drop @visible ks))
+                                 " more "
+                                 (keyword-header headers))
+                  :style    {:margin           "0.1em 0.1em"
+                             :background-color clr-dark
+                             :color            clr-light}
+                  :class    "extend-filter"
+                  :on-click #(reset! visible (count ks))}]
+         (when (> (count ks) 5)
            [:input {:type     "button"
-                    :value    (str "+ " (count (drop @visible ks))
-                                   " more "
+                    :value    (str "Less "
                                    (keyword-header headers))
                     :style    {:margin           "0.1em 0.1em"
                                :background-color clr-dark
                                :color            clr-light}
                     :class    "extend-filter"
-                    :on-click #(reset! visible (count ks))}]
-           (when (> (count ks) 5)
-             [:input {:type     "button"
-                      :value    (str "Less "
-                                     (keyword-header headers))
-                      :style    {:margin           "0.1em 0.1em"
-                                 :background-color clr-dark
-                                 :color            clr-light}
-                      :class    "extend-filter"
-                      :on-click #(reset! visible 5)}]))
-         [:input {:type     "button"
-                  :hidden   (every? @state/visible-years @state/all-years)
-                  :value    "Show All Years"
-                  :style    {:margin           "0.1em 0.1em"
-                             :background-color clr-dark
-                             :color            clr-light}
-                  :on-click (fn []
-                              (doseq [yr @state/all-years]
-                                (sieve/remove-filter!
-                                 (str yr) :year+key)))}])])))
+                    :on-click #(reset! visible 5)}]))])))
 
 (defn mark-text
-  ([text] (let [searching (s/trim @state/query)]
-            (if (seq searching)
-              (mark-text text (sieve/text-matches searching text))
+  ([text] (let [q (str/trim @state/query)]
+            (if (seq q)
+              (mark-text text (sieve/text-matches q text))
               text)))
   ([text found-list]
    (if (or (empty? found-list)
            (empty? text))
      text
      (let [found (first found-list)
-           [head tail] (s/split text (sieve/plain-text->re found) 2)]
+           [head tail] (str/split text (sieve/plain-text->re found) 2)]
        [:<> head [:mark {:style {:padding "0"
                                  :background-color clr-dark
                                  :color clr-light}} found]
         (mark-text tail (rest found-list))]))))
 
+(defn display-link [k row]
+  (let [str->links (fn [text]
+                     [:a {:href (if (str/starts-with? (str/lower-case text) "http")
+                                  text
+                                  (str "http://" text))}
+                      text])
+        vec->hiccup (fn [chunk]
+                      (if (sequential? chunk)
+                        (into [:<>]
+                              (interpose " + "
+                                         (map str->links chunk)))
+                        (str " " chunk " ")))]
+    [:<> (map vec->hiccup (k row))]))
+
 (defn display-info
   ([k row] (display-info k row (k (:headers row))))
   ([k row head]
-   [:<> {:key (str (:anchor+url row) (name k))}
+   [:<>
     (when (seq (k row))
       [:p [:strong (str head ": ")]
        (cond
-         (= k :year+key)
-         [:a {:href (str "#" (val (first (k row))) "toc")} (val (first (k row)))]
-         (s/ends-with? (name k) "+url")
-         (into [:<>] (interpose " + " (for [url (k row)] [:a {:href url} url])))
-         (s/ends-with? (name k) "+key")
-         [:a {:href (str "#" (:anchor+url row))} (key-buttons k (k row))]
-         :else (mark-text (k row)))])]))
+         (str/ends-with? (name k) "+url")
+         (display-link k row)
+         #_(into [:<>] (interpose " + " (for [url (k row)] [:a {:href url} url])))
+
+         (str/ends-with? (name k) "+key")
+         [:a {:href (str "#" (:anchor+url row))} [key-buttons k (k row)]]
+
+         :else [mark-text (k row)])])]))
 
 (defn larp-title [row]
   (if (seq (:link+url row))
     [:a {:href (:link+url row)} (mark-text (:title row))]
     (mark-text (:title row))))
 
-(defn larp-entry [row]
-  [:div {:hidden false}
-   [:h2 {:id (:anchor+url row) :key (str (:anchor+url row) "header")} (larp-title row)]
-   [:h3 {:key (str (:anchor+url row) "byline")} "by " (mark-text (:designers row))]
+(defn larp-entry [year row]
+  [:<>
+   [:h2 {:id (:anchor+url row)} (larp-title row)]
+   [:h3  "by " (mark-text (:designers row))]
+   #_[:p {:style {:color "red"}}(rand)]
    (when (seq (:not-eligible row))
-     [:p {:key (str (:anchor+url row) (name :not-eligible))} "(Not Eligible for Awards)"])
+     [:p  "(Not Eligible for Awards)"])
    (when (seq (:designers-work+url row))
      [display-info :designers-work+url row "Other Work"])
    (when (seq (:styles-of-play+key row))
@@ -189,31 +221,33 @@
    [display-info :description row]
    (when (seq (:tags+key row))
      [display-info :tags+key row])
-   (when (seq (:year+key row))
-     [display-info :year+key row "Year Submitted"])
+   [:a {:href (str "#" "toc" year)} year]
    (let [accounted-for [:anchor+url :title :designers :designers-work+url
                         :tags+key :styles-of-play+key :description
-                        :not-eligible :link+url :year+key]]
+                        :not-eligible :link+url :year]]
      (doall
       (for [k (keys (apply dissoc (:headers row) accounted-for))]
         ^{:key k}
         [display-info k row])))])
+
+(defn larp-entry-wrapper [year row]
+  [:div {:hidden (not (@sieve/visible-entries row))}
+   ^{:key (:anchor+url row)}
+   [larp-entry year row]])
 
 (defn contents [year larps]
   [:div {:id (str "content-" year)
          :hidden (not (@state/visible-years year))}
    (doall
     (for [row larps]
-      ^{:key (:anchor+url row)} [larp-entry row] ))])
+      ^{:key (:anchor+url row)} [larp-entry-wrapper year row] ))])
 
 (def debounced-search-fn
   (gfun/debounce
    (fn [e] (let [q (.. e -target -value)]
              (if (> (count q) 2)
-               (do (sieve/set-query! q)
-                   (sieve/update-sieve!))
-               (do (sieve/clear-query!)
-                   (sieve/update-sieve!)))))
+               (sieve/set-query! q)
+               (sieve/clear-query!))))
    300))
 
 (defn search-bar []
@@ -229,13 +263,10 @@
             :class "search-clear"
             :on-click (fn []
                         (sieve/clear-query!)
-                        (set! (.. (gdom/getElement "search") -value) "")
-                        (sieve/update-sieve!))}]
-   (when @state/no-match
-     [:span {:style {:color "#a44"}} " No Matches Found"])])
+                        (set! (.. (gdom/getElement "search") -value) ""))}]])
 
 (defn rand-showcase []
-  (let [larps           @state/flat-results
+  (let [larps           @sieve/result-list
         quantity        5
         showcased-larps (r/atom (take quantity (shuffle larps)))
         button-texts    ["Re-roll!" "Deal me another hand!"
@@ -263,7 +294,7 @@
   [:div
    [:h1 "Interactive Golden Cobra Archive [BETA]"]
    [search-bar]
-   [filter-by-keys :year+key]
+   [filter-by-year]
    [filter-by-keys :styles-of-play+key]
    [filter-by-keys :tags+key]
    [:input {:type "button"
@@ -274,17 +305,16 @@
             :on-click (fn []
                         (sieve/clear-filters!)
                         (sieve/clear-query!)
-                        (set! (.. (gdom/getElement "search") -value) "")
-                        (sieve/update-sieve!))}]])
+                        (set! (.. (gdom/getElement "search") -value) ""))}]])
 
-(defn result-body []
-  (let [larps @state/entries]
-    [:<> (doall (for [[yr llist] larps]
-                  ^{:key yr} [contents yr llist]))]))
+(defn larp-list []
+  (let [larps (into (sorted-map-by >) @state/entries)]
+    [:<> (doall (for [[yr larp-list] larps]
+                  ^{:key yr} [contents yr larp-list]))]))
 
 (defn assembled-page []
   [:div
    [header]
    [rand-showcase]
    [table-of-contents]
-   [result-body]])
+   [larp-list]])

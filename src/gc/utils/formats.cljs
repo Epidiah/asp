@@ -8,6 +8,19 @@
 (defn format-key [words]
   (-> words
       s/lower-case
+      (s/replace #"," "-")
+      (s/replace #"'" "-")
+      (s/replace #"`" "-")
+      (s/replace #"'" "-")
+      (s/replace #"\." "-")
+      (s/replace #"\"" "-")
+      (s/replace #"\{" "-")
+      (s/replace #"\}" "-")
+      (s/replace #"\[" "-")
+      (s/replace #"\]" "-'")
+      (s/replace #"\(" "-")
+      (s/replace #"\)" "-")
+      (s/replace #"," "-")
       (s/replace #" " "-")
       (s/replace #"/" "-or-")
       (s/replace #"&amp;" "and")))
@@ -21,14 +34,8 @@
   (let [all-words (s/split words #"-")
         first-word (s/capitalize (first all-words))
         mid-words (map #(if (uncapped-words %)
-                           %
-                           (s/capitalize %))
-                        (butlast (rest all-words)))
+                          %
+                          (s/capitalize %))
+                       (butlast (rest all-words)))
         last-word (s/capitalize (last all-words))]
     (s/join " " (list first-word (s/join " " mid-words) last-word))))
-
-(defn year+key->int [yk]
-  (-> yk
-      ffirst
-      name
-      js/parseInt))
